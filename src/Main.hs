@@ -3,6 +3,8 @@ module Main where
 import Data.Char (toUpper, isDigit, digitToInt)
 import System.Random
 import System.Exit (exitSuccess)
+import Data.Map (Map)
+import qualified Data.Map as M
 import Control.Monad
 import Control.Monad.Trans.State
 import Control.Monad.Trans.Reader
@@ -10,7 +12,15 @@ import Control.Monad.Trans.Class
 import Control.Monad.IO.Class
 import System.Console.ANSI (clearScreen)
 
-type Morra = StateT Score (ReaderT Config IO)
+data Game = Game {
+                   score :: Score
+                 , plays :: [Int]
+                 , trigrams :: Trigrams
+                 }
+
+type Trigrams = Map (Int, Int) Int
+
+type Morra = StateT Game (ReaderT Config IO)
 type Score = (Int, Int)
 data Gameplay = P2P | P2CPU deriving Show
 newtype Config = Config {
@@ -32,9 +42,10 @@ playerInput i = do
 
 scoreRound :: Int -> Morra ()
 scoreRound total = modify f
-  where f (a,b) = if odd total
-                    then (a + 1, b)
-                    else (a, b + 1)
+  where f s@Game{score = (a,b)} = if odd total
+                                    then s{score = (a + 1, b)}
+                                    else s{score = (a, b + 1)}
+
 
 printRoundResult :: Int -> IO ()
 printRoundResult n = if odd n
@@ -53,23 +64,45 @@ p2p = do
     Just t -> do
       scoreRound t
       liftIO $ printRoundResult t
-      p2cpu
+      p2p
     Nothing -> return ()
 
 p2cpu :: Morra ()
 p2cpu = do
-  total <- liftIO $ do
-    p <- playerInput "P1: "
-    c <- randomCPU
-    putStrLn $ "C: " ++ show c
-    return $ (+c) <$> p
+  p <- liftIO $ playerInput "P1: "
 
-  case total of
-    Just t -> do
+  case p of
+    Just p' -> do
+      g <- get
+      c <- liftIO $ smartCPU g
+      recordPlay p'
+      liftIO $ putStrLn $ "C: " ++ show c
+      let t = p' + c
       scoreRound t
       liftIO $ printRoundResult t
       p2cpu
     Nothing -> return ()
+
+smartCPU :: Game -> IO Int
+smartCPU (Game _ ps t) =
+  if length ps > 3
+     then do
+       let [a,b] = take 2 ps
+           p' = M.lookup (a,b) t
+       case p' of
+         Just p -> return p
+         Nothing -> randomCPU
+     else randomCPU
+
+recordPlay :: Int -> Morra ()
+recordPlay p = do
+  g@(Game _ ps t) <- get
+  if length ps >= 2
+     then do
+       let [a,b] = take 2 ps
+           t' = M.insert (a,b) p t
+       modify (\s -> g{plays = p:ps, trigrams = t'})
+      else modify (\s -> g{plays=p:ps})
 
 morra :: Morra ()
 morra = do
@@ -78,9 +111,11 @@ morra = do
   case gp of
     P2P -> do
       liftIO $ putStrLn "Player vs Player Mode"
+      liftIO $ putStrLn "Player1 (P1) is even, P2 (P2) is odds"
       p2p
     P2CPU -> do
       liftIO $ putStrLn "Player vs CPU Mode"
+      liftIO $ putStrLn "Player (P) is even, CPU (C) is odds"
       p2cpu
 
 randomCPU :: IO Int
@@ -95,8 +130,8 @@ printScore gp (a,b) = do
   liftIO clearScreen
   putStrLn "#####################"
   putStrLn "#### GAME RESULT ####"
-  putStrLn $ "# " ++ p1 ++ " score: " ++ show a
-  putStrLn $ "# " ++ p2 ++ " score: " ++ show b
+  putStrLn $ "# " ++ p1 ++ " score: " ++ show a ++ " #"
+  putStrLn $ "# " ++ p2 ++ " score: " ++ show b ++ " #"
   case compare a b of
     GT -> putStrLn $ toUpper <$> "# " ++ p1 ++ " wins"
     LT -> putStrLn $ toUpper <$> "# " ++ p2 ++ " wins"
@@ -123,9 +158,9 @@ runMorra :: IO ()
 runMorra = do
   putStrLn "Welcome to Morra game"
   gp <- getGameplay
-  (_, score) <- flip runReaderT (Config gp)
-           $ runStateT morra (0,0)
-  printScore gp score
+  (_, s) <- flip runReaderT (Config gp)
+           $ runStateT morra (Game (0,0) [] M.empty)
+  printScore gp (score s)
 
 main :: IO ()
 main = runMorra

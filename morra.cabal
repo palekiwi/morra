@@ -22,3 +22,4 @@ executable morra
                      , mtl
                      , random
                      , ansi-terminal
+                     , containers
