@@ -21,3 +21,4 @@ executable morra
                      , transformers
                      , mtl
                      , random
+                     , ansi-terminal
