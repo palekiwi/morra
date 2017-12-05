@@ -8,6 +8,7 @@ import qualified Data.Map as M
 import Control.Monad
 import Control.Monad.Trans.State
 import Control.Monad.Trans.Reader
+import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.Class
 import Control.Monad.IO.Class
 import System.Console.ANSI (clearScreen)
@@ -52,14 +53,16 @@ printRoundResult n = if odd n
                         then putStrLn "Odd Scores"
                         else putStrLn "Even Scores"
 
+playersInput :: MaybeT IO Int
+playersInput = do
+  p1 <- MaybeT $ playerInput "P1: "
+  liftIO clearScreen
+  p2 <- MaybeT $ playerInput "P2: "
+  return $ p1 + p2
+
 p2p :: Morra ()
 p2p = do
-  total <- liftIO $ do
-    p1 <- playerInput "P1: "
-    clearScreen
-    p2 <- playerInput "P2: "
-    return $ (+) <$> p1 <*> p2
-
+  total <- liftIO (runMaybeT playersInput)
   case total of
     Just t -> do
       scoreRound t
