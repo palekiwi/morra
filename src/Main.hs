@@ -1,6 +1,6 @@
 module Main where
 
-import Data.Char (toUpper, isDigit, digitToInt)
+import Data.Char (toUpper)
 import System.Random
 import System.Exit (exitSuccess)
 import Data.Map (Map)
@@ -24,9 +24,7 @@ type Trigrams = Map (Int, Int) Int
 type Morra = StateT Game (ReaderT Config IO)
 type Score = (Int, Int)
 data Gameplay = P2P | P2CPU deriving Show
-newtype Config = Config {
-                       gameplay :: Gameplay
-                     }
+newtype Config = Config { gameplay :: Gameplay }
 
 playerInput :: String -> IO (Maybe Int)
 playerInput i = do
